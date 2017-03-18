@@ -1,0 +1,196 @@
+\documentclass[11 pt]{amsart}
+\usepackage[top=1.00in,bottom=1.00in,left=1.00in,right=1.00in]{geometry}
+
+\usepackage[final]{pdfpages}
+
+\input{js_header.tex}
+
+\usepackage{amsthm}
+\newtheoremstyle{rexample}
+    {3pt}         % Space above
+    {3pt}         % Space below
+    {}            % Body font
+    {}            % Indent amount
+    {\bfseries}   % Theorem head font
+    {:}           % Punctuation after theorem head
+    {.5em}        % Space after theorem head
+    {}            % Theorem head spec (can be left empty, meaning `normal')
+\theoremstyle{rexample}
+\newtheorem{rexample}{R Code}
+
+<<setup, include=FALSE>>=
+library(knitr)
+knit_hooks$set(rexample = function(before, options, envir) {
+  if (before) sprintf('\\begin{rexample}%s\\label{%s}\\hfill{}', options$caption, options$label) else '\\end{rexample}'
+})
+@
+
+\title{Measurement Error 2}
+\date{\today}
+\author{James Saxon}
+
+\begin{document}
+
+\maketitle
+
+<<mytest, echo=F, warning=F>>=
+library(xtable)
+source("resuscitate.R")
+@
+
+\section*{To Do}
+
+\begin{itemize}
+\item Make ``the'' likelihood fit for NDI data?
+\item Refusals.
+\end{itemize}
+
+
+\section*{Sanity Checks}
+
+\begin{enumerate}
+\item
+Are there false positives?  Yes, note pre-1966 interviews in Figure~\ref{fig:plot_dy}.
+
+\item
+Zombies.  Are any respondents not interviewed due to death and subsequently interviewed?
+See R Code~\ref{rex:zombies} -- none are found.
+Still, this may be self-fulfilling if the NLS doesn't try to interview dead people.
+
+\item
+Evolution of false positives over time.
+Look for men interviewed at dates later than the one on their matched death certificate Table~\ref{table:ghosts}.
+% Codes for interview reasons are in Table~\ref{table:int_codes}.
+
+\item
+Certified Sawyers.
+Do we observe death certificates
+  dated more than two years after a man has been not-interviewed due to death?
+Yes -- apparently quite a lot, Table~\ref{table:sawyers}.
+\begin{itemize}
+\item What is the rate if the NDI and SSA death years match? Lower -- but it still ain't nothin.  See column, `NDI \& SS.'  And 9-digit SSN match, the last column (Full SS).
+\item What is the interview type in 1990 for people who died before 1988?  See Table~\ref{table:int90_type}.  
+Did any windows (or their proxies) respond to the interview in 1990 for subjects supposed to have died after 1992?
+See R Code~\ref{rex:happy_widows}.  There are ten such cases for the NDI dates.
+\end{itemize}
+
+\end{enumerate}
+
+<<plot_dy, echo=F, warning=F, fig.cap="Death year by NDI.  Survey started in 1966, so deaths before 1966 are errors of one flavor or another.", fig.height=3.5, fig.width=5, out.width='.49\\linewidth', fig.align="center">>=
+print(pndi_dy)
+@
+
+<<rex:zombies, rexample=TRUE, caption='Ghost check: interview after non-interview due to death.  None are found.', evaluate=F>>=
+cn <- colnames(d)
+fni <- cn[grep("fNonInt", cn)][1:11]
+
+for (a in seq_along(1:10)) {
+
+  fniA <- fni[a]
+  fniB <- fni[a+1]
+
+  zombies <- (d[[fniA]] == "DECEASED") & (d[[fniB]] != "DECEASED")
+  if (sum(zombies)) {
+    print(sprintf("Zombies in %s to %s!!!", fniA, fniB))
+    print(d[zombies,"IDENTIFICATION CODE, 66"])
+  }
+}
+@
+
+
+<<table:ghosts, echo=F, results="asis">>=
+print(xtable(ghost_table(d), caption="Interviewed after death by match: ghosts.",
+             align = "ccccc", digits = c(0,0,0,0,0),
+             label = "table:ghosts"))
+@
+
+<<table:int_codes, echo=F, results="hide">>=
+print(xtable(nonint_nom_vars[c("Year", "Response")],
+             caption = "Non-interview reason.", align = "ccc", digits = c(0,0,0),
+             label = "table:int_codes"), include.rownames=FALSE)
+@
+
+<<table:sawyers, echo=F, results="asis">>=
+xt <- xtable(certified_sawyers(d), caption="Death certificate dated more than two years after non-interview due to death: Tom Sawyers.",
+             align = "c|cc|c|cc|c", digits = c(0,0,0,0,0,0,0),
+             label = "table:sawyers")
+
+names(xt)[3] <- "NDI & SS"
+names(xt)[6] <- "Full SS"
+print(xt)
+@
+
+<<table:int90_type, echo=F, results="asis">>=
+xtable(widow_table(d), caption="Interview type in 1990, for repondents recorded to have died before 1988.",
+       align = "lcccc", digits = rep(0, 5), label = "table:int90_type")
+@
+
+<<rex:happy_widows, rexample=TRUE, caption='Check for respondents noted to have died after 1992 but whose widow (or their proxy) responded in 1990.'>>=
+colSums(d[d$fResp_1990 %in% c("Widow", "Widow Proxy"),
+        c("ndiDeathYear","ssDeathYear","certDeathYear","int90DeathYear")] > 1992,
+        na.rm = T)
+@
+
+
+<<plot_match, echo=F, warning=F, fig.cap="Age at death by race from the SSA and NDI matches.", fig.subcap=c("SSA", "NDI"), fig.height=3.5, fig.width=5, out.width='.49\\linewidth', fig.align="center">>=
+source("simple_plot.R")
+print(pss)
+print(pndi)
+@
+
+
+<<plot_diff, echo=F, warning=F, fig.height=3.5, fig.width=5, out.width='.49\\linewidth', fig.align="center", fig.cap="Difference in ages between SSA and NDI match.">>=
+pdiff
+@
+
+<<plot_int90, echo=F, warning=F, fig.cap="Age at death by race from 1990 interview and death certificate.", fig.subcap=c("Interview", "Certificate"), fig.height=3.5, fig.width=5, out.width='.49\\linewidth', fig.align="center">>=
+print(pcert)
+print(pint90)
+@
+
+\clearpage
+
+\section*{Covariates}
+
+Predictive measures: life expectancy for conditions.  Also list these for ghosts.
+\begin{itemize}
+\item Wealth: \texttt{TOTAL FAMILY INCOME, YY (SUMMATION)}, \texttt{INCOME FROM WAGES \& SALARY IN YY - R} (66, 67, 69, 71, 73, 75, 76, 78, 80)
+\begin{itemize}
+\item Use year for constant age, then adjust wage to year X??
+\item Or by quantiles?  Still doesn't capture different respondents at different points in wage trajectory.
+\end{itemize}
+\item Smoking: 1990 R (current R0627700 and R0628100) and W (R0719600).  Weird selection here, since R xor W must live to 1990.  Could do years or number of cigarettes smoked instead?
+\item Heavy alcohol: frequency in lifetime, recorded in 1990 by R (any R0628600, days R0628700, quantity R0628800) and W (any R0720400, days R0720500, quantity R0720600).  Calling heavy alcohol (totally arbitrarily) $\geq 3$ days a week AND $\geq 5$ drinks per drinking day.
+\item BMI in 73 and 90 (W = R0258700, H = R0258600).  BMI = $\text{kg}/\text{m}^2 = 703.27 \times \text{lbs}/\text{in}^2$. 
+\item Ethnicity by foreign language spoken at home (R0228000): 0 None, 1 Spanish, 2 Germanic, 3 Other Romance, 4 Slavic, 5 Other.
+\item Which health problems are predictive?  Do both ``conditions experienced as a problem," and ``health limits X."
+      The annoying thing about these variables is that it's the universe, and not the responses themselves, that give the first-order flag.
+      So I am comparing ``yes I experience it as a (manageable) problem" to ``-4, no it's not registering" as opposed to ``not manageable" v. "manageable."
+\end{itemize}
+
+\section*{Likelihood from NDI Data}
+
+
+In the original paper
+  we expressed the componenent for a single person $i$ dying at age $a_i$
+  with terminal/maximum observations $A_T$, by:
+\[ \mathcal{L}_i = \begin{cases} \log h(a_i) + \sum_{a = 1}^{a_i - 1} \log(1 - h(a_i)) & a_i < A_T \\
+                                 \log \sum_{a = 1}^{A_T} \log(1 - h(a_i)) & a_i \geq A_T \\
+                   \end{cases} \]
+Where one could either parameterize over all hazards,
+  $h(a) = e^{-\lambda + \beta a/A_T}$ or just let the per age hazards float, $h(a) = h_a$.
+And then the total was the sum over subjects, $\sum_i \mathcal{L}_i$.
+
+Let's think about the NDI data:
+\begin{itemize}
+\item What do the -5 (non-interview), -4 (valid skip) and -2 (don't know) mean in this context?
+\item N.B. the sharp spikes at the top-coded ages of 90 (see Figure~\ref{fig:plot_match}).  These presumably consist of (a) failure to match and mismatch, (b) people who died at 90 and (c) people who died at $> 90$.
+\item
+The thing that irks me is that as the likelihood is written,
+  it feels like we're fitting a string of observations
+  when we actually just have one (no match or match age).
+Nicht war?
+It feels like the more-natural thing to fit would be the Gompertz-esque $e^{-\alpha e^{\beta a_i} +\beta a_i}$ plus components for $a_i > A_T$ and $a_i = \o$.
+\end{itemize}
+
+\end{document}
